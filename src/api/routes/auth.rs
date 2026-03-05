@@ -60,12 +60,27 @@ pub fn create_router(db: Arc<Database>, jwt_secret: String, jwt_expiration: i64)
 async fn register(
     State(state): State<AuthState>,
     Json(payload): Json<CreateUserRequest>,
-) -> Result<Json<UserResponse>, (StatusCode, Json<ApiError>)> {
+) -> Result<Json<LoginResponse>, (StatusCode, Json<ApiError>)> {
     let auth_service = AuthService::new(state.db.clone(), state.jwt_secret.clone(), state.jwt_expiration);
-    let result = auth_service.register(payload)
+    let user_response = auth_service.register(payload)
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::from(e))))?;
     
-    Ok(Json(result))
+    // Generate token for the newly registered user
+    let user = auth_service.get_user_by_username(&user_response.username)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
+    
+    let token = auth_service.generate_token(&user)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
+    
+    Ok(Json(LoginResponse {
+        token,
+        user: UserResponse {
+            id: user_response.id,
+            username: user_response.username,
+            role: user_response.role,
+            created_at: user_response.created_at,
+        },
+    }))
 }
 
 async fn login(
