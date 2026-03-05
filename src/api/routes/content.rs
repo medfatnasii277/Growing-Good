@@ -86,24 +86,23 @@ async fn complete_content(
     State(state): State<ContentState>,
     Path(id): Path<i64>,
     Json(payload): Json<CompleteContentRequest>,
+    extract::Extension(user_id): extract::Extension<i64>,
 ) -> Result<Json<UserProgress>, (StatusCode, Json<ApiError>)> {
-    // For now, use a default user_id - in production, get from token
-    let user_id = 1i64;
     let game_service = GameService::new(state.db.clone());
     let progress = game_service.complete_content(user_id, id, payload.score)
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::from(e))))?;
     Ok(Json(progress))
-}
+)
 
 async fn get_user_progress(
     State(state): State<ContentState>,
+    extract::Extension(user_id): extract::Extension<i64>,
 ) -> Result<Json<Vec<UserProgress>>, (StatusCode, Json<ApiError>)> {
-    let user_id = 1i64;
     let game_service = GameService::new(state.db.clone());
     let progress = game_service.get_user_progress(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
     Ok(Json(progress))
-}
+)
 
 #[derive(Debug, Serialize)]
 struct UserStatsResponse {
@@ -113,8 +112,8 @@ struct UserStatsResponse {
 
 async fn get_user_stats(
     State(state): State<ContentState>,
+    extract::Extension(user_id): extract::Extension<i64>,
 ) -> Result<Json<UserStatsResponse>, (StatusCode, Json<ApiError>)> {
-    let user_id = 1i64;
     let game_service = GameService::new(state.db.clone());
     let stats = game_service.get_user_stats(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
@@ -122,7 +121,7 @@ async fn get_user_stats(
         completed_count: stats.completed_count,
         total_score: stats.total_score,
     }))
-}
+)
 
 async fn list_categories(
     State(state): State<ContentState>,
