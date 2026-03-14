@@ -1,5 +1,5 @@
 pub mod routes;
 pub mod middleware;
+pub mod openapi;
 
-pub use routes::*;
-pub use middleware::*;
+// Explicitly export only needed items to avoid ambiguity

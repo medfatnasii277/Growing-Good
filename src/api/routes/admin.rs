@@ -5,11 +5,11 @@ use axum::{
     routing::{get, post, put, delete},
     Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use crate::application::{ContentService, ContentServiceError};
 use crate::domain::{
     ContentItemResponse, Category, CreateCategoryRequest,
-    CreateContentRequest, UpdateContentRequest, User, UserResponse
+    CreateContentRequest, UpdateContentRequest, UserResponse
 };
 use crate::infrastructure::{Database, UserRepository};
 use std::sync::Arc;

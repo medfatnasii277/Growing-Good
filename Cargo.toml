@@ -35,4 +35,8 @@ thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
+# OpenAPI / Swagger
+utoipa = "4"
+utoipa-swagger-ui = { version = "6", features = ["axum"] }
+
 [dev-dependencies]

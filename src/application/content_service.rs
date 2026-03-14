@@ -1,5 +1,5 @@
 use crate::domain::{
-    ContentItem, ContentType, Category, 
+    Category, ContentItem,
     CreateContentRequest, UpdateContentRequest, CreateCategoryRequest,
     ContentItemResponse
 };

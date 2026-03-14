@@ -3,7 +3,4 @@ pub mod content;
 pub mod admin;
 pub mod progress;
 
-pub use auth::*;
-pub use content::*;
-pub use admin::*;
-pub use progress::*;
+// Explicitly export only needed items to avoid ambiguity

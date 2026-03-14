@@ -117,6 +117,12 @@ impl AuthService {
         Ok(user)
     }
 
+    pub fn get_user_by_username(&self, username: &str) -> Result<User, AuthError> {
+        let repo = UserRepository::new(&self.db);
+        let user = repo.find_by_username(username)?;
+        Ok(user)
+    }
+
     pub fn is_admin(&self, token: &str) -> bool {
         if let Ok(claims) = self.verify_token(token) {
             claims.role == UserRole::Admin.to_string()

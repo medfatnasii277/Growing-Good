@@ -1,14 +1,17 @@
 use axum::{
     extract::State,
+    extract,
     http::StatusCode,
     response::Json,
     routing::{get, post},
     Router,
+    middleware,
 };
 use serde::{Deserialize, Serialize};
 use crate::application::{AuthService, AuthError};
 use crate::domain::{CreateUserRequest, UserResponse};
 use crate::infrastructure::Database;
+use crate::api::middleware::auth::auth_middleware;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -45,15 +48,23 @@ impl From<AuthError> for ApiError {
 
 pub fn create_router(db: Arc<Database>, jwt_secret: String, jwt_expiration: i64) -> Router {
     let state = AuthState {
-        db,
-        jwt_secret,
+        db: db.clone(),
+        jwt_secret: jwt_secret.clone(),
         jwt_expiration,
     };
     
-    Router::new()
+    // Public auth routes (no middleware)
+    let public_routes = Router::new()
         .route("/api/auth/register", post(register))
-        .route("/api/auth/login", post(login))
+        .route("/api/auth/login", post(login));
+    
+    // Protected auth routes (with auth middleware)
+    let protected_routes = Router::new()
         .route("/api/auth/me", get(me))
+        .layer(middleware::from_fn(auth_middleware));
+    
+    public_routes
+        .merge(protected_routes)
         .with_state(state)
 }
 
@@ -108,7 +119,16 @@ async fn login(
 
 async fn me(
     State(_state): State<AuthState>,
+    extract::Extension(token): extract::Extension<String>,
 ) -> Result<Json<UserResponse>, (StatusCode, Json<ApiError>)> {
-    // This is a placeholder - in a real app, we'd get the token from the request
-    Err((StatusCode::UNAUTHORIZED, Json(ApiError { error: "Not implemented".to_string() })))
+    let auth_service = AuthService::new(_state.db.clone(), _state.jwt_secret.clone(), _state.jwt_expiration);
+    let user = auth_service.get_user_from_token(&token)
+        .map_err(|e| (StatusCode::UNAUTHORIZED, Json(ApiError::from(e))))?;
+    
+    Ok(Json(UserResponse {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        created_at: user.created_at,
+    }))
 }
