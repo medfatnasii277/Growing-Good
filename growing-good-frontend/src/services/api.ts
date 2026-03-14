@@ -8,10 +8,24 @@ import type {
   UserProgress,
   CreateContentRequest,
   CreateCategoryRequest,
-  User
+  User,
+  LeaderboardResponse
 } from '../types';
 
 const API_URL = 'http://localhost:3000';
+
+export const getCurrentUserId = (): number | null => {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      return user?.id || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
 
 const api = axios.create({
   baseURL: API_URL,
@@ -98,12 +112,23 @@ export const contentAPI = {
       throw new Error('Failed to validate answer');
     }),
   
-  complete: (id: number, score: number) => 
-    api.post('/api/content/' + id + '/complete', { score })
+  complete: (id: number, score: number) => {
+    const userId = getCurrentUserId();
+    return api.post('/api/content/' + id + '/complete', { user_id: userId, score })
     .catch((error: any) => {
       console.error('Failed to complete content:', error);
       throw new Error('Failed to complete content');
-    }),
+    });
+  },
+
+  getUserStats: () => {
+    const userId = getCurrentUserId();
+    return api.get<{ completed_count: number; total_score: number }>('/api/content/stats?user_id=' + userId)
+    .catch((error: any) => {
+      console.error('Failed to get user stats:', error);
+      throw new Error('Failed to get user stats');
+    });
+  },
 };
 
 // Admin Content API
@@ -176,18 +201,42 @@ export const adminUserAPI = {
 
 // Progress API
 export const progressAPI = {
-  getUserProgress: () => 
-    api.get<UserProgress[]>('/api/progress')
+  getUserProgress: () => {
+    const userId = getCurrentUserId();
+    return api.get<UserProgress[]>('/api/content/progress?user_id=' + userId)
     .catch((error: any) => {
       console.error('Failed to get user progress:', error);
       throw new Error('Failed to get user progress');
-    }),
+    });
+  },
   
   getContentProgress: (contentId: number) => 
     api.get<UserProgress>('/api/progress/' + contentId)
     .catch((error: any) => {
       console.error('Failed to get content progress:', error);
       throw new Error('Failed to get content progress');
+    }),
+};
+
+// Leaderboard API
+export const leaderboardAPI = {
+  getLeaderboard: (limit?: number) => {
+    const userId = getCurrentUserId();
+    let params = '';
+    if (limit) params += 'limit=' + limit;
+    if (userId) params += (params ? '&' : '') + 'user_id=' + userId;
+    return api.get<LeaderboardResponse>('/api/leaderboard' + (params ? '?' + params : ''))
+    .catch((error: any) => {
+      console.error('Failed to load leaderboard:', error);
+      throw new Error('Failed to load leaderboard');
+    });
+  },
+  
+  getUserRank: (userId: number) => 
+    api.get<{ rank: number; total_score: number }>('/api/leaderboard/user/' + userId)
+    .catch((error: any) => {
+      console.error('Failed to get user rank:', error);
+      throw new Error('Failed to get user rank');
     }),
 };
 

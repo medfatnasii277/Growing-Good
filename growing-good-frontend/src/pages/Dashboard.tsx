@@ -162,6 +162,14 @@ const Dashboard = () => {
 
             {/* User Section */}
             <div className="flex items-center gap-3">
+              <Link
+                to="/leaderboard"
+                className="fun-button btn-coral text-sm py-2 px-4 flex items-center gap-2"
+              >
+                <Trophy className="w-4 h-4" />
+                <span className="hidden sm:inline">Leaderboard</span>
+              </Link>
+
               {isAdmin && (
                 <Link
                   to="/admin"

@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import ContentDetail from './pages/ContentDetail';
+import Leaderboard from './pages/Leaderboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminContent from './pages/admin/AdminContent';
 import AdminCategories from './pages/admin/AdminCategories';
@@ -43,6 +44,11 @@ const AppRoutes = () => {
       <Route path="/content/:id" element={
         <ProtectedRoute>
           <ContentDetail />
+        </ProtectedRoute>
+      } />
+      <Route path="/leaderboard" element={
+        <ProtectedRoute>
+          <Leaderboard />
         </ProtectedRoute>
       } />
       

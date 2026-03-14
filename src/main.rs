@@ -6,8 +6,11 @@ use tower_http::cors::{CorsLayer, Any};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use std::sync::Arc;
+use utoipa_swagger_ui::SwaggerUi;
+use utoipa::OpenApi;
 
-use growing_good::{Database, config::Config};
+use growing_good::{infrastructure::Database, config::Config};
+use growing_good::api::openapi::ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -33,10 +36,24 @@ async fn main() {
     
     tracing::info!("Database initialized at {}", config.database.path);
 
+    // CORS configuration with explicit Authorization header
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(vec![
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+        ])
+        .expose_headers(vec![
+            axum::http::header::CONTENT_TYPE,
+        ]);
+
     // Build the application
     let app = Router::new()
         // Health check
         .route("/health", get(health_check))
+        // Swagger UI - Note: SwaggerUi already registers /api-docs/openapi.json
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Auth routes
         .merge(growing_good::api::routes::auth::create_router(
             db.clone(),
@@ -48,18 +65,14 @@ async fn main() {
         // Admin routes
         .merge(growing_good::api::routes::admin::create_router(db.clone()))
         // CORS
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
+        .layer(cors)
         // Tracing
         .layer(TraceLayer::new_for_http());
 
     // Start the server
     let addr = config.server.address();
     tracing::info!("Server starting on {}", addr);
+    tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

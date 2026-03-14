@@ -84,3 +84,17 @@ export interface CreateCategoryRequest {
   name: string;
   description?: string;
 }
+
+export interface LeaderboardEntry {
+  user_id: number;
+  username: string;
+  total_score: number;
+  completed_count: number;
+  rank: number;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  user_rank?: number;
+  user_score?: number;
+}

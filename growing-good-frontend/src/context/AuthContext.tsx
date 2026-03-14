@@ -15,25 +15,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [user, setUser] = useState<User | null>(() => {
+    const stored = localStorage.getItem('user');
+    return stored ? JSON.parse(stored) : null;
+  });
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
 
   useEffect(() => {
-    if (token) {
+    if (token && !user) {
       authAPI.me()
-        .then(res => setUser(res.data))
+        .then(res => {
+          setUser(res.data);
+          localStorage.setItem('user', JSON.stringify(res.data));
+        })
         .catch(() => {
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           setToken(null);
           setUser(null);
         });
     }
-  }, [token]);
+  }, [token, user]);
 
   const login = async (username: string, password: string) => {
     const response = await authAPI.login({ username, password });
     const { token: newToken, user: newUser } = response.data;
     localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
   };
@@ -42,12 +50,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const response = await authAPI.register({ username, password, role });
     const { token: newToken, user: newUser } = response.data;
     localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
   };
