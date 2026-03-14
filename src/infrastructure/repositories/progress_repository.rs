@@ -150,6 +150,7 @@ impl ProgressRepository {
                 COUNT(p.id) as completed_count
             FROM users u
             LEFT JOIN user_progress p ON u.id = p.user_id AND p.completed = 1
+            WHERE u.role != 'admin'
             GROUP BY u.id
             ORDER BY total_score DESC
             LIMIT ?1",
@@ -190,10 +191,11 @@ impl ProgressRepository {
 
         let rank: i64 = conn.query_row(
             "SELECT COUNT(*) + 1 FROM (
-                SELECT user_id, COALESCE(SUM(score), 0) as total_score
-                FROM user_progress 
-                WHERE completed = 1
-                GROUP BY user_id
+                SELECT up.user_id, COALESCE(SUM(up.score), 0) as total_score
+                FROM user_progress up
+                JOIN users u ON up.user_id = u.id
+                WHERE up.completed = 1 AND u.role != 'admin'
+                GROUP BY up.user_id
                 HAVING total_score > ?1
             )",
             params![user_score],
