@@ -5,6 +5,7 @@ import type {
   ContentItem,
   CreateCategoryRequest,
   CreateContentRequest,
+  LearningJourneyResponse,
   LeaderboardResponse,
   UpdateProfileRequest,
   User,
@@ -87,14 +88,19 @@ export const contentAPI = {
       throw new Error(getErrorMessage(error, 'Failed to validate answer'));
     }),
 
-  complete: (id: number, score: number) =>
-    api.post(`/api/content/${id}/complete`, { score }).catch((error: unknown) => {
+  complete: (id: number, score: number, durationSeconds?: number) =>
+    api.post(`/api/content/${id}/complete`, { score, duration_seconds: durationSeconds }).catch((error: unknown) => {
       throw new Error(getErrorMessage(error, 'Failed to complete content'));
     }),
 
   getUserStats: () =>
     api.get<UserStats>('/api/content/stats').catch((error: unknown) => {
       throw new Error(getErrorMessage(error, 'Failed to get user stats'));
+    }),
+
+  getRecommendations: () =>
+    api.get<LearningJourneyResponse>('/api/content/recommendations').catch((error: unknown) => {
+      throw new Error(getErrorMessage(error, 'Failed to get recommendations'));
     }),
 };
 

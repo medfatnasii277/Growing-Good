@@ -1,4 +1,4 @@
-use crate::domain::{CompleteContentRequest, UserProgress};
+use crate::domain::{CompleteContentRequest, ContentAttempt, ContentType, UserProgress};
 use crate::infrastructure::database::Database;
 use chrono::Utc;
 use rusqlite::params;
@@ -21,6 +21,16 @@ pub enum ProgressError {
     Database(#[from] rusqlite::Error),
     #[error("Progress not found")]
     NotFound,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttemptInsightRow {
+    pub content_id: i64,
+    pub category_id: Option<i64>,
+    pub category_name: Option<String>,
+    pub content_type: ContentType,
+    pub score: i32,
+    pub duration_seconds: Option<i32>,
 }
 
 pub struct ProgressRepository {
@@ -93,6 +103,11 @@ impl ProgressRepository {
         let conn = self.db.conn.lock().unwrap();
 
         let now = Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO content_attempts (user_id, content_id, score, duration_seconds, completed_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![user_id, content_id, request.score, request.duration_seconds, now],
+        )?;
 
         // Try to update existing progress first
         let rows = conn.execute(
@@ -203,5 +218,70 @@ impl ProgressRepository {
         )?;
 
         Ok(rank)
+    }
+
+    pub fn get_attempt_history(&self, user_id: i64) -> Result<Vec<ContentAttempt>, ProgressError> {
+        let conn = self.db.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT id, user_id, content_id, score, duration_seconds, completed_at
+             FROM content_attempts
+             WHERE user_id = ?1
+             ORDER BY completed_at DESC",
+        )?;
+
+        let attempts = stmt
+            .query_map(params![user_id], |row| {
+                let completed_at: String = row.get(5)?;
+                Ok(ContentAttempt {
+                    id: row.get(0)?,
+                    user_id: row.get(1)?,
+                    content_id: row.get(2)?,
+                    score: row.get(3)?,
+                    duration_seconds: row.get(4).ok(),
+                    completed_at: completed_at.parse().unwrap_or_else(|_| Utc::now()),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(attempts)
+    }
+
+    pub fn get_attempt_insights(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<AttemptInsightRow>, ProgressError> {
+        let conn = self.db.conn.lock().unwrap();
+
+        let mut stmt = conn.prepare(
+            "SELECT
+                a.content_id,
+                c.category_id,
+                cat.name,
+                c.content_type,
+                a.score,
+                a.duration_seconds
+            FROM content_attempts a
+            JOIN content_items c ON c.id = a.content_id
+            LEFT JOIN categories cat ON cat.id = c.category_id
+            WHERE a.user_id = ?1
+            ORDER BY a.completed_at DESC",
+        )?;
+
+        let rows = stmt
+            .query_map(params![user_id], |row| {
+                let content_type: String = row.get(3)?;
+                Ok(AttemptInsightRow {
+                    content_id: row.get(0)?,
+                    category_id: row.get(1)?,
+                    category_name: row.get(2).ok(),
+                    content_type: content_type.parse().unwrap_or(ContentType::Quiz),
+                    score: row.get(4)?,
+                    duration_seconds: row.get(5).ok(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(rows)
     }
 }

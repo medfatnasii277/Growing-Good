@@ -14,6 +14,17 @@ pub struct UserProgress {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompleteContentRequest {
     pub score: i32,
+    pub duration_seconds: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentAttempt {
+    pub id: i64,
+    pub user_id: i64,
+    pub content_id: i64,
+    pub score: i32,
+    pub duration_seconds: Option<i32>,
+    pub completed_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

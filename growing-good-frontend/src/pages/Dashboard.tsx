@@ -2,10 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { contentAPI } from '../services/api';
 import { useAuth } from '../context/useAuth';
-import type { ContentItem, ContentType, User as AppUser } from '../types';
+import type {
+  ContentItem,
+  ContentType,
+  LearningJourneyResponse,
+  User as AppUser,
+} from '../types';
 import { 
   BookOpen, HelpCircle, Gamepad2, Star, CheckCircle, Shield, 
-  Sparkles, Sun, Cloud, Heart, Trophy, LogOut, User as UserIcon, Rocket
+  Sparkles, Sun, Cloud, Heart, Trophy, LogOut, User as UserIcon, Rocket, Brain, Timer, Target
 } from 'lucide-react';
 import ProfileEditModal from '../components/ProfileEditModal';
 import { getErrorMessage } from '../utils/errors';
@@ -15,12 +20,17 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [journey, setJourney] = useState<LearningJourneyResponse | null>(null);
   const { user, logout, isAdmin, setUser } = useAuth();
 
   const loadContent = useCallback(async () => {
     try {
-      const response = await contentAPI.list();
-      setContent(response.data);
+      const [contentResponse, recommendationsResponse] = await Promise.all([
+        contentAPI.list(),
+        contentAPI.getRecommendations(),
+      ]);
+      setContent(contentResponse.data);
+      setJourney(recommendationsResponse.data);
     } catch (error: unknown) {
       setError(getErrorMessage(error, 'Failed to load content'));
     } finally {
@@ -93,6 +103,12 @@ const Dashboard = () => {
       case 'click_game': return '🎮';
       default: return '⭐';
     }
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.round(seconds / 60);
+    return `${minutes} min`;
   };
 
   if (loading) {
@@ -234,6 +250,102 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {journey && (
+          <section className="mb-8 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+            <div className="fun-card border-4 border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-50 p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg">
+                  <Brain className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-700" style={{ fontFamily: 'Fredoka, sans-serif' }}>
+                    Next Best Steps
+                  </h3>
+                  <p className="text-sm text-gray-500">{journey.focus_message}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {journey.recommendations.map((entry) => {
+                  const style = getContentStyle(entry.content.content_type);
+                  return (
+                    <Link
+                      key={entry.content.id}
+                      to={`/content/${entry.content.id}`}
+                      className={`rounded-3xl border-4 ${style.border} bg-white/80 p-5 shadow-sm transition-transform hover:-translate-y-1`}
+                    >
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${style.gradient} text-white shadow-lg`}>
+                          {getContentIcon(entry.content.content_type)}
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${style.bg} ${style.text}`}>
+                          {getTypeEmoji(entry.content.content_type)} Match {entry.match_score}
+                        </span>
+                      </div>
+                      <h4 className="mb-2 text-lg font-bold text-gray-800">{entry.content.title}</h4>
+                      <p className="mb-4 text-sm text-gray-500">
+                        {entry.content.description || 'A tailored activity picked from your learning journey.'}
+                      </p>
+                      <div className="mb-4 rounded-2xl bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                        {entry.reason}
+                      </div>
+                      <div className="flex items-center justify-between text-sm font-semibold text-gray-500">
+                        <span className="flex items-center gap-2">
+                          <Timer className="h-4 w-4" />
+                          {formatDuration(entry.estimated_duration_seconds)}
+                        </span>
+                        <span className="flex items-center gap-2 text-green-600">
+                          <Rocket className="h-4 w-4" />
+                          Start
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="fun-card border-4 border-orange-200 bg-gradient-to-br from-orange-50 via-yellow-50 to-amber-50 p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-yellow-400 shadow-lg">
+                  <Target className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-700" style={{ fontFamily: 'Fredoka, sans-serif' }}>
+                    Focus Areas
+                  </h3>
+                  <p className="text-sm text-gray-500">Updated from score, pace, and completion history.</p>
+                </div>
+              </div>
+
+              {journey.weak_areas.length > 0 ? (
+                <div className="space-y-3">
+                  {journey.weak_areas.map((area) => (
+                    <div key={area.category_name} className="rounded-2xl bg-white/80 p-4 shadow-sm">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-bold text-gray-700">{area.category_name}</p>
+                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                          {area.attempt_count} tries
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        Avg score {Math.round(area.average_score)}%
+                        {area.average_duration_seconds
+                          ? ` • Avg pace ${formatDuration(Math.round(area.average_duration_seconds))}`
+                          : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-white/80 p-4 text-sm text-gray-500 shadow-sm">
+                  Complete a few activities and this panel will start spotting patterns automatically.
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Section Title */}
         <div className="flex items-center gap-4 mb-6">

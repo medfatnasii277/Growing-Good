@@ -240,9 +240,13 @@ impl GameService {
         user_id: i64,
         content_id: i64,
         score: i32,
+        duration_seconds: Option<i32>,
     ) -> Result<UserProgress, GameError> {
         let repo = ProgressRepository::new(&self.db);
-        let request = CompleteContentRequest { score };
+        let request = CompleteContentRequest {
+            score,
+            duration_seconds,
+        };
         Ok(repo.complete_content(user_id, content_id, request)?)
     }
 

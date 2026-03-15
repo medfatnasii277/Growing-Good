@@ -98,7 +98,17 @@ impl ContentRepository {
 
     pub fn delete_category(&self, id: i64) -> Result<(), ContentError> {
         let conn = self.db.conn.lock().unwrap();
-        conn.execute("DELETE FROM categories WHERE id = ?1", params![id])?;
+
+        conn.execute(
+            "UPDATE content_items SET category_id = NULL, updated_at = datetime('now') WHERE category_id = ?1",
+            params![id],
+        )?;
+
+        let rows = conn.execute("DELETE FROM categories WHERE id = ?1", params![id])?;
+        if rows == 0 {
+            return Err(ContentError::CategoryNotFound);
+        }
+
         Ok(())
     }
 
@@ -302,7 +312,17 @@ impl ContentRepository {
 
     pub fn delete(&self, id: i64) -> Result<(), ContentError> {
         let conn = self.db.conn.lock().unwrap();
-        conn.execute("DELETE FROM content_items WHERE id = ?1", params![id])?;
+
+        conn.execute(
+            "DELETE FROM user_progress WHERE content_id = ?1",
+            params![id],
+        )?;
+
+        let rows = conn.execute("DELETE FROM content_items WHERE id = ?1", params![id])?;
+        if rows == 0 {
+            return Err(ContentError::NotFound);
+        }
+
         Ok(())
     }
 }

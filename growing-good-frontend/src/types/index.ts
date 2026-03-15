@@ -77,6 +77,27 @@ export interface UserProgress {
   completed_at?: string;
 }
 
+export interface WeakArea {
+  category_id?: number;
+  category_name: string;
+  average_score: number;
+  average_duration_seconds?: number;
+  attempt_count: number;
+}
+
+export interface RecommendedContent {
+  content: ContentItem;
+  reason: string;
+  estimated_duration_seconds: number;
+  match_score: number;
+}
+
+export interface LearningJourneyResponse {
+  focus_message: string;
+  recommendations: RecommendedContent[];
+  weak_areas: WeakArea[];
+}
+
 export interface CreateContentRequest {
   title: string;
   description?: string;

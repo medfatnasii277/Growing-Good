@@ -1,9 +1,11 @@
 use crate::api::middleware::auth::auth_middleware;
 use crate::application::{
-    AuthService, ContentService, ContentServiceError, GameError, GameService,
+    AuthService, ContentService, ContentServiceError, GameError, GameService, LearningJourneyError,
+    LearningJourneyService,
 };
 use crate::domain::{
-    Category, ContentItemResponse, UserProgress, ValidateAnswerRequest, ValidateAnswerResponse,
+    Category, ContentItemResponse, LearningJourneyResponse, UserProgress, ValidateAnswerRequest,
+    ValidateAnswerResponse,
 };
 use crate::infrastructure::repositories::progress_repository::LeaderboardEntry;
 use crate::infrastructure::Database;
@@ -48,6 +50,14 @@ impl From<GameError> for ApiError {
     }
 }
 
+impl From<LearningJourneyError> for ApiError {
+    fn from(err: LearningJourneyError) -> Self {
+        ApiError {
+            error: err.to_string(),
+        }
+    }
+}
+
 pub fn create_router(db: Arc<Database>, jwt_secret: String, jwt_expiration: i64) -> Router {
     let state = ContentState {
         db,
@@ -72,6 +82,7 @@ pub fn create_router(db: Arc<Database>, jwt_secret: String, jwt_expiration: i64)
         .route("/api/content/:id/complete", post(complete_content))
         .route("/api/content/progress", get(get_user_progress))
         .route("/api/content/stats", get(get_user_stats))
+        .route("/api/content/recommendations", get(get_recommendations))
         .route(
             "/api/leaderboard/me",
             get(get_current_user_leaderboard_rank),
@@ -117,6 +128,7 @@ async fn validate_content(
 #[derive(Debug, Deserialize)]
 struct CompleteContentBody {
     score: i32,
+    duration_seconds: Option<i32>,
 }
 
 async fn complete_content(
@@ -128,7 +140,7 @@ async fn complete_content(
     let user_id = current_user_id(&state, &token)?;
     let game_service = GameService::new(state.db.clone());
     let progress = game_service
-        .complete_content(user_id, id, payload.score)
+        .complete_content(user_id, id, payload.score, payload.duration_seconds)
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::from(e))))?;
     Ok(Json(progress))
 }
@@ -164,6 +176,18 @@ async fn get_user_stats(
         completed_count: stats.completed_count,
         total_score: stats.total_score,
     }))
+}
+
+async fn get_recommendations(
+    State(state): State<ContentState>,
+    extract::Extension(token): extract::Extension<String>,
+) -> Result<Json<LearningJourneyResponse>, (StatusCode, Json<ApiError>)> {
+    let user_id = current_user_id(&state, &token)?;
+    let journey_service = LearningJourneyService::new(state.db.clone());
+    let recommendations = journey_service
+        .get_recommendations(user_id, 3)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
+    Ok(Json(recommendations))
 }
 
 #[derive(Debug, Deserialize)]
