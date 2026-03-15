@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { leaderboardAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import type { LeaderboardEntry } from '../types';
 import { Trophy, Medal, Crown, Star, ArrowLeft, User } from 'lucide-react';
+import { getErrorMessage } from '../utils/errors';
 
 const Leaderboard = () => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -14,17 +15,20 @@ const Leaderboard = () => {
   const { user } = useAuth();
 
   useEffect(() => {
-    loadLeaderboard();
+    void loadLeaderboard();
   }, []);
 
   const loadLeaderboard = async () => {
     try {
-      const response = await leaderboardAPI.getLeaderboard(20);
+      const [response, rankResponse] = await Promise.all([
+        leaderboardAPI.getLeaderboard(20),
+        leaderboardAPI.getMyRank(),
+      ]);
       setEntries(response.data.entries);
-      setUserRank(response.data.user_rank ?? null);
-      setUserScore(response.data.user_score ?? null);
-    } catch (error: any) {
-      setError(error.message || 'Failed to load leaderboard');
+      setUserRank(rankResponse.data.rank);
+      setUserScore(rankResponse.data.total_score);
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to load leaderboard'));
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
 import { Star, Sparkles, Sun, Moon, Cloud, Heart } from 'lucide-react';
+import { getErrorMessage } from '../utils/errors';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -18,8 +19,8 @@ const Login = () => {
     try {
       await login(username, password);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Login failed'));
     } finally {
       setLoading(false);
     }

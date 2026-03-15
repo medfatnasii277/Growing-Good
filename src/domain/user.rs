@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum UserRole {
@@ -20,7 +20,7 @@ impl std::fmt::Display for UserRole {
 
 impl std::str::FromStr for UserRole {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "admin" => Ok(UserRole::Admin),
@@ -36,6 +36,7 @@ pub struct User {
     pub username: String,
     pub password_hash: String,
     pub role: UserRole,
+    pub avatar: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -52,6 +53,13 @@ pub struct UpdateUserRequest {
     pub username: Option<String>,
     pub password: Option<String>,
     pub role: Option<UserRole>,
+    pub avatar: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateProfileRequest {
+    pub username: Option<String>,
+    pub avatar: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,5 +67,6 @@ pub struct UserResponse {
     pub id: i64,
     pub username: String,
     pub role: UserRole,
+    pub avatar: Option<String>,
     pub created_at: DateTime<Utc>,
 }

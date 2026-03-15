@@ -1,16 +1,13 @@
-use axum::{
-    routing::get,
-    Router,
-};
-use tower_http::cors::{CorsLayer, Any};
+use axum::{routing::get, Router};
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use std::sync::Arc;
-use utoipa_swagger_ui::SwaggerUi;
 use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
-use growing_good::{infrastructure::Database, config::Config};
 use growing_good::api::openapi::ApiDoc;
+use growing_good::{config::Config, infrastructure::Database};
 
 #[tokio::main]
 async fn main() {
@@ -27,13 +24,12 @@ async fn main() {
 
     // Load configuration
     let config = Config::default();
-    
+
     // Initialize database
-    let db = Database::new(&config.database.path)
-        .expect("Failed to initialize database");
-    
+    let db = Database::new(&config.database.path).expect("Failed to initialize database");
+
     let db = Arc::new(db);
-    
+
     tracing::info!("Database initialized at {}", config.database.path);
 
     // CORS configuration with explicit Authorization header
@@ -44,9 +40,7 @@ async fn main() {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
         ])
-        .expose_headers(vec![
-            axum::http::header::CONTENT_TYPE,
-        ]);
+        .expose_headers(vec![axum::http::header::CONTENT_TYPE]);
 
     // Build the application
     let app = Router::new()
@@ -61,9 +55,17 @@ async fn main() {
             config.jwt.expires_in_hours,
         ))
         // Content routes (user)
-        .merge(growing_good::api::routes::content::create_router(db.clone()))
+        .merge(growing_good::api::routes::content::create_router(
+            db.clone(),
+            config.jwt.secret.clone(),
+            config.jwt.expires_in_hours,
+        ))
         // Admin routes
-        .merge(growing_good::api::routes::admin::create_router(db.clone()))
+        .merge(growing_good::api::routes::admin::create_router(
+            db.clone(),
+            config.jwt.secret.clone(),
+            config.jwt.expires_in_hours,
+        ))
         // CORS
         .layer(cors)
         // Tracing

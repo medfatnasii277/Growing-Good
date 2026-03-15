@@ -1,24 +1,30 @@
+use crate::api::middleware::auth::auth_middleware;
+use crate::application::{
+    AuthService, ContentService, ContentServiceError, GameError, GameService,
+};
+use crate::domain::{
+    Category, ContentItemResponse, UserProgress, ValidateAnswerRequest, ValidateAnswerResponse,
+};
+use crate::infrastructure::repositories::progress_repository::LeaderboardEntry;
+use crate::infrastructure::Database;
 use axum::{
-    extract::{State, Path, Query},
+    extract,
+    extract::{Path, Query, State},
     http::StatusCode,
+    middleware,
     response::Json,
     routing::{get, post},
     Router,
 };
-use serde::Serialize;
 use serde::Deserialize;
-use crate::application::{ContentService, ContentServiceError, GameService, GameError};
-use crate::domain::{
-    ContentItemResponse, Category,
-    ValidateAnswerRequest, ValidateAnswerResponse, UserProgress
-};
-use crate::infrastructure::Database;
-use crate::infrastructure::repositories::progress_repository::LeaderboardEntry;
+use serde::Serialize;
 use std::sync::Arc;
 
 #[derive(Clone)]
 struct ContentState {
     db: Arc<Database>,
+    jwt_secret: String,
+    jwt_expiration: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -28,39 +34,59 @@ pub struct ApiError {
 
 impl From<ContentServiceError> for ApiError {
     fn from(err: ContentServiceError) -> Self {
-        ApiError { error: err.to_string() }
+        ApiError {
+            error: err.to_string(),
+        }
     }
 }
 
 impl From<GameError> for ApiError {
     fn from(err: GameError) -> Self {
-        ApiError { error: err.to_string() }
+        ApiError {
+            error: err.to_string(),
+        }
     }
 }
 
-pub fn create_router(db: Arc<Database>) -> Router {
-    let state = ContentState { db };
-    
-    Router::new()
+pub fn create_router(db: Arc<Database>, jwt_secret: String, jwt_expiration: i64) -> Router {
+    let state = ContentState {
+        db,
+        jwt_secret,
+        jwt_expiration,
+    };
+
+    let public_routes = Router::new()
         .route("/api/content", get(list_content))
         .route("/api/content/:id", get(get_content))
         .route("/api/content/:id/validate", post(validate_content))
+        // Leaderboard routes
+        .route("/api/leaderboard", get(get_leaderboard))
+        .route(
+            "/api/leaderboard/user/:user_id",
+            get(get_user_leaderboard_rank),
+        )
+        // Category routes
+        .route("/api/categories", get(list_categories));
+
+    let protected_routes = Router::new()
         .route("/api/content/:id/complete", post(complete_content))
         .route("/api/content/progress", get(get_user_progress))
         .route("/api/content/stats", get(get_user_stats))
-        // Leaderboard routes
-        .route("/api/leaderboard", get(get_leaderboard))
-        .route("/api/leaderboard/user/:user_id", get(get_user_leaderboard_rank))
-        // Category routes
-        .route("/api/categories", get(list_categories))
-        .with_state(state)
+        .route(
+            "/api/leaderboard/me",
+            get(get_current_user_leaderboard_rank),
+        )
+        .layer(middleware::from_fn(auth_middleware));
+
+    public_routes.merge(protected_routes).with_state(state)
 }
 
 async fn list_content(
     State(state): State<ContentState>,
 ) -> Result<Json<Vec<ContentItemResponse>>, (StatusCode, Json<ApiError>)> {
     let content_service = ContentService::new(state.db.clone());
-    let content = content_service.get_all_content()
+    let content = content_service
+        .get_all_content()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
     Ok(Json(content))
 }
@@ -70,7 +96,8 @@ async fn get_content(
     Path(id): Path<i64>,
 ) -> Result<Json<ContentItemResponse>, (StatusCode, Json<ApiError>)> {
     let content_service = ContentService::new(state.db.clone());
-    let content = content_service.get_content(id)
+    let content = content_service
+        .get_content(id)
         .map_err(|e| (StatusCode::NOT_FOUND, Json(ApiError::from(e))))?;
     Ok(Json(content))
 }
@@ -81,39 +108,39 @@ async fn validate_content(
     Json(payload): Json<ValidateAnswerRequest>,
 ) -> Result<Json<ValidateAnswerResponse>, (StatusCode, Json<ApiError>)> {
     let game_service = GameService::new(state.db.clone());
-    let result = game_service.validate_answer(id, payload)
+    let result = game_service
+        .validate_answer(id, payload)
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::from(e))))?;
     Ok(Json(result))
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct CompleteContentBody {
-    user_id: i64,
     score: i32,
 }
 
 async fn complete_content(
     State(state): State<ContentState>,
+    extract::Extension(token): extract::Extension<String>,
     Path(id): Path<i64>,
     Json(payload): Json<CompleteContentBody>,
 ) -> Result<Json<UserProgress>, (StatusCode, Json<ApiError>)> {
+    let user_id = current_user_id(&state, &token)?;
     let game_service = GameService::new(state.db.clone());
-    let progress = game_service.complete_content(payload.user_id, id, payload.score)
+    let progress = game_service
+        .complete_content(user_id, id, payload.score)
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::from(e))))?;
     Ok(Json(progress))
 }
 
-#[derive(Deserialize)]
-struct UserQuery {
-    user_id: i64,
-}
-
 async fn get_user_progress(
     State(state): State<ContentState>,
-    Query(query): Query<UserQuery>,
+    extract::Extension(token): extract::Extension<String>,
 ) -> Result<Json<Vec<UserProgress>>, (StatusCode, Json<ApiError>)> {
+    let user_id = current_user_id(&state, &token)?;
     let game_service = GameService::new(state.db.clone());
-    let progress = game_service.get_user_progress(query.user_id)
+    let progress = game_service
+        .get_user_progress(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
     Ok(Json(progress))
 }
@@ -126,10 +153,12 @@ struct UserStatsResponse {
 
 async fn get_user_stats(
     State(state): State<ContentState>,
-    Query(query): Query<UserQuery>,
+    extract::Extension(token): extract::Extension<String>,
 ) -> Result<Json<UserStatsResponse>, (StatusCode, Json<ApiError>)> {
+    let user_id = current_user_id(&state, &token)?;
     let game_service = GameService::new(state.db.clone());
-    let stats = game_service.get_user_stats(query.user_id)
+    let stats = game_service
+        .get_user_stats(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
     Ok(Json(UserStatsResponse {
         completed_count: stats.completed_count,
@@ -140,7 +169,6 @@ async fn get_user_stats(
 #[derive(Debug, Deserialize)]
 struct LeaderboardQuery {
     limit: Option<i64>,
-    user_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -156,28 +184,15 @@ async fn get_leaderboard(
 ) -> Result<Json<LeaderboardResponse>, (StatusCode, Json<ApiError>)> {
     let game_service = GameService::new(state.db.clone());
     let limit = query.limit.unwrap_or(10);
-    
-    let entries = game_service.get_leaderboard(limit)
+
+    let entries = game_service
+        .get_leaderboard(limit)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
-    
-    let (user_rank, user_score) = if let Some(uid) = query.user_id {
-        match game_service.get_user_rank(uid) {
-            Ok(rank) => {
-                let score = game_service.get_user_stats(uid)
-                    .map(|s| s.total_score)
-                    .unwrap_or(0);
-                (Some(rank), Some(score))
-            },
-            Err(_) => (None, None),
-        }
-    } else {
-        (None, None)
-    };
-    
+
     Ok(Json(LeaderboardResponse {
         entries,
-        user_rank,
-        user_score,
+        user_rank: None,
+        user_score: None,
     }))
 }
 
@@ -192,13 +207,36 @@ async fn get_user_leaderboard_rank(
     Path(user_id): Path<i64>,
 ) -> Result<Json<UserRankResponse>, (StatusCode, Json<ApiError>)> {
     let game_service = GameService::new(state.db.clone());
-    
-    let rank = game_service.get_user_rank(user_id)
+
+    let rank = game_service
+        .get_user_rank(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
-    
-    let stats = game_service.get_user_stats(user_id)
+
+    let stats = game_service
+        .get_user_stats(user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
-    
+
+    Ok(Json(UserRankResponse {
+        rank,
+        total_score: stats.total_score,
+    }))
+}
+
+async fn get_current_user_leaderboard_rank(
+    State(state): State<ContentState>,
+    extract::Extension(token): extract::Extension<String>,
+) -> Result<Json<UserRankResponse>, (StatusCode, Json<ApiError>)> {
+    let user_id = current_user_id(&state, &token)?;
+    let game_service = GameService::new(state.db.clone());
+
+    let rank = game_service
+        .get_user_rank(user_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
+
+    let stats = game_service
+        .get_user_stats(user_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
+
     Ok(Json(UserRankResponse {
         rank,
         total_score: stats.total_score,
@@ -209,7 +247,27 @@ async fn list_categories(
     State(state): State<ContentState>,
 ) -> Result<Json<Vec<Category>>, (StatusCode, Json<ApiError>)> {
     let content_service = ContentService::new(state.db.clone());
-    let categories = content_service.get_categories()
+    let categories = content_service
+        .get_categories()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::from(e))))?;
     Ok(Json(categories))
+}
+
+fn current_user_id(state: &ContentState, token: &str) -> Result<i64, (StatusCode, Json<ApiError>)> {
+    let auth_service = AuthService::new(
+        state.db.clone(),
+        state.jwt_secret.clone(),
+        state.jwt_expiration,
+    );
+    auth_service
+        .verify_token(token)
+        .map(|claims| claims.user_id)
+        .map_err(|e| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError {
+                    error: e.to_string(),
+                }),
+            )
+        })
 }

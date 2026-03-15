@@ -3,23 +3,25 @@ import { Link } from 'react-router-dom';
 import { adminCategoryAPI } from '../../services/api';
 import type { Category, CreateCategoryRequest } from '../../types';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { getErrorMessage } from '../../utils/errors';
 
 const AdminCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<CreateCategoryRequest>({ name: '', description: '' });
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    loadCategories();
+    void loadCategories();
   }, []);
 
   const loadCategories = async () => {
     try {
       const response = await adminCategoryAPI.list();
       setCategories(response.data);
-    } catch (error) {
-      console.error('Failed to load categories:', error);
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to load categories'));
     } finally {
       setLoading(false);
     }
@@ -31,15 +33,22 @@ const AdminCategories = () => {
       await adminCategoryAPI.create(formData);
       setFormData({ name: '', description: '' });
       setShowForm(false);
-      loadCategories();
-    } catch (error) {
-      console.error('Failed to create category:', error);
+      await loadCategories();
+      setError('');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to create category'));
     }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this category?')) return;
-    // Note: This would need a delete API endpoint
+    try {
+      await adminCategoryAPI.delete(id);
+      await loadCategories();
+      setError('');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to delete category'));
+    }
   };
 
   if (loading) return <div className="p-8">Loading...</div>;
@@ -62,6 +71,12 @@ const AdminCategories = () => {
           <Link to="/admin" className="text-gray-600"><ArrowLeft className="w-6 h-6" /></Link>
           <h2 className="text-3xl font-bold text-gray-800">Categories</h2>
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+            {error}
+          </div>
+        )}
 
         {showForm ? (
           <div className="bg-white rounded-xl shadow-md p-6 max-w-lg">
@@ -104,7 +119,17 @@ const AdminCategories = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {categories.map((cat) => (
                 <div key={cat.id} className="bg-white rounded-xl shadow-md p-6">
-                  <h3 className="font-bold text-lg">{cat.name}</h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-bold text-lg">{cat.name}</h3>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(cat.id)}
+                      className="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50"
+                      aria-label={`Delete ${cat.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                   <p className="text-gray-600 mt-2">{cat.description || 'No description'}</p>
                   <p className="text-gray-400 text-sm mt-4">Created: {new Date(cat.created_at).toLocaleDateString()}</p>
                 </div>

@@ -1,22 +1,22 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { adminContentAPI, adminCategoryAPI, adminUserAPI } from '../../services/api';
-import type { ContentItem, Category, User } from '../../types';
+import type { ContentItem, Category } from '../../types';
 import { Users, BookOpen, FolderOpen, Settings, LogOut, Plus, Home, ArrowLeft, HelpCircle, Gamepad2 } from 'lucide-react';
+import { getErrorMessage } from '../../utils/errors';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [content, setContent] = useState<ContentItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState({ content: 0, categories: 0, users: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const loadData = async () => {
@@ -28,14 +28,13 @@ const AdminDashboard = () => {
       ]);
       setContent(contentRes.data);
       setCategories(categoryRes.data);
-      setUsers(userRes.data);
       setStats({
         content: contentRes.data.length,
         categories: categoryRes.data.length,
         users: userRes.data.length,
       });
-    } catch (error: any) {
-      setError(error.message || 'Failed to load data');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to load data'));
     } finally {
       setLoading(false);
     }
@@ -188,7 +187,7 @@ const AdminDashboard = () => {
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-bold text-gray-800">Recent Content</h3>
             <Link
-              to="/admin/content/new"
+              to="/admin/content"
               className="bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-600"
             >
               <Plus className="w-4 h-4" />

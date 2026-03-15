@@ -1,24 +1,28 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
-import { Star, Sparkles, Sun, Cloud, Heart, Rocket, Palette, GraduationCap } from 'lucide-react';
+import { Star, Sparkles, Sun, Cloud, Heart, Rocket } from 'lucide-react';
+import { getErrorMessage } from '../utils/errors';
 
 const Register = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'user' | 'admin'>('user');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
-      await register(username, password, role);
+      await register(username, password);
       navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data || 'Registration failed');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Registration failed'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -88,64 +92,17 @@ const Register = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-gray-600 text-sm font-bold mb-3 flex items-center gap-2">
-              <span className="text-lg">🎭</span>
-              Who are you?
-            </label>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setRole('user')}
-                className={`p-4 rounded-2xl border-3 transition-all ${
-                  role === 'user'
-                    ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-400 shadow-lg scale-105'
-                    : 'bg-white border-gray-200 hover:border-green-300'
-                }`}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    role === 'user' ? 'bg-green-400' : 'bg-gray-100'
-                  }`}>
-                    <Palette className={`w-6 h-6 ${role === 'user' ? 'text-white' : 'text-gray-400'}`} />
-                  </div>
-                  <span className={`font-bold ${role === 'user' ? 'text-green-600' : 'text-gray-500'}`}>
-                    Child
-                  </span>
-                  <span className="text-xs text-gray-400">Play & Learn!</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRole('admin')}
-                className={`p-4 rounded-2xl border-3 transition-all ${
-                  role === 'admin'
-                    ? 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-400 shadow-lg scale-105'
-                    : 'bg-white border-gray-200 hover:border-purple-300'
-                }`}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    role === 'admin' ? 'bg-purple-400' : 'bg-gray-100'
-                  }`}>
-                    <GraduationCap className={`w-6 h-6 ${role === 'admin' ? 'text-white' : 'text-gray-400'}`} />
-                  </div>
-                  <span className={`font-bold ${role === 'admin' ? 'text-purple-600' : 'text-gray-500'}`}>
-                    Grown-up
-                  </span>
-                  <span className="text-xs text-gray-400">Parent/Teacher</span>
-                </div>
-              </button>
-            </div>
+          <div className="rounded-2xl border border-purple-100 bg-purple-50/70 px-4 py-3 text-sm text-purple-700">
+            New accounts start as learner profiles. Admin access is managed separately for safety.
           </div>
 
           <button
             type="submit"
-            className="fun-button btn-lavender w-full text-lg mt-6"
+            disabled={loading}
+            className="fun-button btn-lavender w-full text-lg mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="flex items-center justify-center gap-2">
-              <span>Create My Account</span>
+              <span>{loading ? 'Creating Account...' : 'Create My Account'}</span>
               <Sparkles className="w-5 h-5" />
             </span>
           </button>

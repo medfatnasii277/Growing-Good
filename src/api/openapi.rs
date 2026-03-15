@@ -1,5 +1,5 @@
-use utoipa::{OpenApi, ToSchema};
 use serde::{Deserialize, Serialize};
+use utoipa::{OpenApi, ToSchema};
 
 /// Login request payload
 #[derive(Debug, Deserialize, ToSchema)]

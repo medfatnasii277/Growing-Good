@@ -1,3 +1,4 @@
+use bcrypt::hash;
 use rusqlite::{Connection, Result as SqliteResult};
 use std::path::Path;
 use std::sync::Mutex;
@@ -19,9 +20,9 @@ impl Database {
 
     fn run_migrations(&self) -> SqliteResult<()> {
         let conn = self.conn.lock().unwrap();
-        
+
         info!("Running database migrations...");
-        
+
         conn.execute_batch(
             r#"
             -- Users table (both children and admins)
@@ -30,6 +31,7 @@ impl Database {
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
+                avatar TEXT,
                 created_at TEXT DEFAULT (datetime('now')),
                 updated_at TEXT DEFAULT (datetime('now'))
             );
@@ -79,6 +81,18 @@ impl Database {
             "#,
         )?;
 
+        let has_avatar_column = conn
+            .prepare("PRAGMA table_info(users)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .any(|column| column == "avatar");
+
+        if !has_avatar_column {
+            info!("Adding avatar column to users table...");
+            conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT", [])?;
+        }
+
         // Insert default admin user if not exists
         let admin_exists: i32 = conn.query_row(
             "SELECT COUNT(*) FROM users WHERE username = 'admin'",
@@ -88,9 +102,11 @@ impl Database {
 
         if admin_exists == 0 {
             info!("Creating default admin user...");
+            let password_hash =
+                hash("admin123", 10).expect("default admin password hashing should succeed");
             conn.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES ('admin', 'admin123', 'admin')",
-                [],
+                "INSERT INTO users (username, password_hash, role, avatar) VALUES (?1, ?2, 'admin', NULL)",
+                ("admin", password_hash),
             )?;
         }
 

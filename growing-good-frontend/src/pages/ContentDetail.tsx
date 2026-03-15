@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { contentAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import type { ContentItem, QuizData, ReadingData, ClickGameData } from '../types';
 import { 
   ArrowLeft, Star, CheckCircle, BookOpen, HelpCircle, Gamepad2,
   Sparkles, Sun, Cloud, Heart, Trophy, Home, Clock, Lightbulb,
   Target, PartyPopper, Rocket
 } from 'lucide-react';
+import { getErrorMessage } from '../utils/errors';
 
 const ContentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [content, setContent] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,21 +23,20 @@ const ContentDetail = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [showFeedback, setShowFeedback] = useState<'correct' | 'wrong' | null>(null);
 
-  useEffect(() => {
-    loadContent();
-  }, [id]);
-
-  // Timer for click game
-  useEffect(() => {
-    if (content?.content_type === 'click_game' && !completed && timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !completed && content?.content_type === 'click_game') {
-      handleGameComplete();
+  const handleGameComplete = useCallback(async () => {
+    if (!content) return;
+    const gameData = content.data as ClickGameData;
+    const remainingCorrect = gameItems.filter((item) => gameData.correct_items.includes(item)).length;
+    const finalScore = Math.round((1 - remainingCorrect / gameData.correct_items.length) * 100);
+    try {
+      await contentAPI.complete(content.id, Math.max(0, finalScore));
+      setCompleted(true);
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to complete game'));
     }
-  }, [timeLeft, completed, content]);
+  }, [content, gameItems]);
 
-  const loadContent = async () => {
+  const loadContent = useCallback(async () => {
     try {
       const response = await contentAPI.get(Number(id));
       setContent(response.data);
@@ -47,12 +45,26 @@ const ContentDetail = () => {
         setGameItems([...data.correct_items, ...data.wrong_items].sort(() => Math.random() - 0.5));
         setTimeLeft(data.time_limit_seconds);
       }
-    } catch (error: any) {
-      setError(error.message || 'Failed to load content');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to load content'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    void loadContent();
+  }, [loadContent]);
+
+  // Timer for click game
+  useEffect(() => {
+    if (content?.content_type === 'click_game' && !completed && timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (timeLeft === 0 && !completed && content?.content_type === 'click_game') {
+      void handleGameComplete();
+    }
+  }, [timeLeft, completed, content, handleGameComplete]);
 
   const handleQuizSubmit = async () => {
     if (!content) return;
@@ -63,21 +75,22 @@ const ContentDetail = () => {
     
     setTimeout(async () => {
       setShowFeedback(null);
-      
+      const nextScore = score + (isCorrect ? 1 : 0);
+
       if (isCorrect) {
-        setScore(score + 1);
+        setScore(nextScore);
       }
 
       if (currentQuestion < quizData.questions.length - 1) {
         setCurrentQuestion(currentQuestion + 1);
         setSelectedAnswer(null);
       } else {
-        const finalScore = Math.round(((score + (isCorrect ? 1 : 0)) / quizData.questions.length) * 100);
+        const finalScore = Math.round((nextScore / quizData.questions.length) * 100);
         try {
           await contentAPI.complete(content.id, finalScore);
           setCompleted(true);
-        } catch (error: any) {
-          setError(error.message || 'Failed to complete quiz');
+        } catch (error: unknown) {
+          setError(getErrorMessage(error, 'Failed to complete quiz'));
         }
       }
     }, 1000);
@@ -88,8 +101,8 @@ const ContentDetail = () => {
     try {
       await contentAPI.complete(content.id, 100);
       setCompleted(true);
-    } catch (error: any) {
-      setError(error.message || 'Failed to complete reading');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to complete reading'));
     }
   };
 
@@ -106,23 +119,10 @@ const ContentDetail = () => {
         try {
           await contentAPI.complete(content.id, finalScore);
           setCompleted(true);
-        } catch (error: any) {
-          setError(error.message || 'Failed to complete game');
+        } catch (error: unknown) {
+          setError(getErrorMessage(error, 'Failed to complete game'));
         }
       }
-    }
-  };
-
-  const handleGameComplete = async () => {
-    if (!content) return;
-    const gameData = content.data as ClickGameData;
-    const remainingCorrect = gameItems.filter(i => gameData.correct_items.includes(i)).length;
-    const finalScore = Math.round((1 - remainingCorrect / gameData.correct_items.length) * 100);
-    try {
-      await contentAPI.complete(content.id, Math.max(0, finalScore));
-      setCompleted(true);
-    } catch (error: any) {
-      setError(error.message || 'Failed to complete game');
     }
   };
 

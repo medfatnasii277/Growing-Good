@@ -3,21 +3,23 @@ import { Link } from 'react-router-dom';
 import { adminUserAPI } from '../../services/api';
 import type { User } from '../../types';
 import { ArrowLeft, Users as UsersIcon } from 'lucide-react';
+import { getErrorMessage } from '../../utils/errors';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    loadUsers();
+    void loadUsers();
   }, []);
 
   const loadUsers = async () => {
     try {
       const response = await adminUserAPI.list();
       setUsers(response.data);
-    } catch (error) {
-      console.error('Failed to load users:', error);
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to load users'));
     } finally {
       setLoading(false);
     }
@@ -41,8 +43,15 @@ const AdminUsers = () => {
       <div className="ml-64 p-8">
         <div className="flex items-center gap-4 mb-6">
           <Link to="/admin" className="text-gray-600"><ArrowLeft className="w-6 h-6" /></Link>
+          <UsersIcon className="w-7 h-7 text-gray-500" />
           <h2 className="text-3xl font-bold text-gray-800">User Management</h2>
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+            {error}
+          </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
           <table className="w-full">

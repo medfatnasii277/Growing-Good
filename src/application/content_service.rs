@@ -1,9 +1,8 @@
 use crate::domain::{
-    Category, ContentItem,
-    CreateContentRequest, UpdateContentRequest, CreateCategoryRequest,
-    ContentItemResponse
+    Category, ContentItem, ContentItemResponse, CreateCategoryRequest, CreateContentRequest,
+    UpdateContentRequest,
 };
-use crate::infrastructure::{Database, ContentRepository, ContentError};
+use crate::infrastructure::{ContentError, ContentRepository, Database};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -25,7 +24,10 @@ impl ContentService {
     }
 
     // Category operations
-    pub fn create_category(&self, request: CreateCategoryRequest) -> Result<Category, ContentServiceError> {
+    pub fn create_category(
+        &self,
+        request: CreateCategoryRequest,
+    ) -> Result<Category, ContentServiceError> {
         let repo = ContentRepository::new(&self.db);
         Ok(repo.create_category(request)?)
     }
@@ -55,16 +57,19 @@ impl ContentService {
     pub fn get_content(&self, id: i64) -> Result<ContentItemResponse, ContentServiceError> {
         let repo = ContentRepository::new(&self.db);
         let item = repo.find_by_id(id)?;
-        
+
         // Only return active content to regular users
         if !item.is_active {
             return Err(ContentServiceError::PermissionDenied);
         }
-        
+
         Ok(ContentItemResponse::from(item))
     }
 
-    pub fn get_content_by_category(&self, category_id: i64) -> Result<Vec<ContentItemResponse>, ContentServiceError> {
+    pub fn get_content_by_category(
+        &self,
+        category_id: i64,
+    ) -> Result<Vec<ContentItemResponse>, ContentServiceError> {
         let repo = ContentRepository::new(&self.db);
         let items = repo.find_by_category(category_id, true)?;
         Ok(items.into_iter().map(ContentItemResponse::from).collect())
@@ -77,13 +82,20 @@ impl ContentService {
         Ok(items.into_iter().map(ContentItemResponse::from).collect())
     }
 
-    pub fn admin_create_content(&self, request: CreateContentRequest) -> Result<ContentItemResponse, ContentServiceError> {
+    pub fn admin_create_content(
+        &self,
+        request: CreateContentRequest,
+    ) -> Result<ContentItemResponse, ContentServiceError> {
         let repo = ContentRepository::new(&self.db);
         let item = repo.create(request)?;
         Ok(ContentItemResponse::from(item))
     }
 
-    pub fn admin_update_content(&self, id: i64, request: UpdateContentRequest) -> Result<ContentItemResponse, ContentServiceError> {
+    pub fn admin_update_content(
+        &self,
+        id: i64,
+        request: UpdateContentRequest,
+    ) -> Result<ContentItemResponse, ContentServiceError> {
         let repo = ContentRepository::new(&self.db);
         let item = repo.update(id, request)?;
         Ok(ContentItemResponse::from(item))

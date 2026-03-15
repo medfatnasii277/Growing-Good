@@ -1,35 +1,42 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { contentAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import type { ContentItem } from '../types';
+import { useAuth } from '../context/useAuth';
+import type { ContentItem, ContentType, User as AppUser } from '../types';
 import { 
   BookOpen, HelpCircle, Gamepad2, Star, CheckCircle, Shield, 
-  Sparkles, Sun, Cloud, Heart, Trophy, LogOut, User, Rocket
+  Sparkles, Sun, Cloud, Heart, Trophy, LogOut, User as UserIcon, Rocket
 } from 'lucide-react';
+import ProfileEditModal from '../components/ProfileEditModal';
+import { getErrorMessage } from '../utils/errors';
 
 const Dashboard = () => {
   const [content, setContent] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { user, logout, isAdmin } = useAuth();
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const { user, logout, isAdmin, setUser } = useAuth();
 
-  useEffect(() => {
-    loadContent();
-  }, []);
-
-  const loadContent = async () => {
+  const loadContent = useCallback(async () => {
     try {
       const response = await contentAPI.list();
       setContent(response.data);
-    } catch (error: any) {
-      setError(error.message || 'Failed to load content');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to load content'));
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void loadContent();
+  }, [loadContent]);
+
+  const handleUpdateUser = (updatedUser: Pick<AppUser, 'id' | 'username' | 'avatar'>) => {
+    setUser((currentUser) => (currentUser ? { ...currentUser, ...updatedUser } : currentUser));
   };
 
-  const getContentIcon = (type: string) => {
+  const getContentIcon = (type: ContentType) => {
     switch (type) {
       case 'quiz':
         return <HelpCircle className="w-10 h-10" />;
@@ -42,7 +49,7 @@ const Dashboard = () => {
     }
   };
 
-  const getContentStyle = (type: string) => {
+  const getContentStyle = (type: ContentType) => {
     switch (type) {
       case 'quiz':
         return {
@@ -79,7 +86,7 @@ const Dashboard = () => {
     }
   };
 
-  const getTypeEmoji = (type: string) => {
+  const getTypeEmoji = (type: ContentType) => {
     switch (type) {
       case 'quiz': return '🧠';
       case 'reading': return '📚';
@@ -180,12 +187,19 @@ const Dashboard = () => {
                 </Link>
               )}
               
-              <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-full py-2 px-4 border-2 border-yellow-200">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-teal-400 flex items-center justify-center">
-                  <User className="w-4 h-4 text-white" />
+              <button
+                onClick={() => setShowProfileEdit(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-full py-2 px-4 border-2 border-yellow-200 hover:from-yellow-100 hover:to-orange-100 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-teal-400 flex items-center justify-center overflow-hidden">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-4 h-4 text-white" />
+                  )}
                 </div>
                 <span className="font-bold text-gray-700 hidden sm:inline">{user?.username}</span>
-              </div>
+              </button>
 
               <button
                 onClick={logout}
@@ -293,6 +307,14 @@ const Dashboard = () => {
       <footer className="mt-12 py-6 text-center text-gray-400 text-sm">
         <p>🌟 Growing Good - Learning Manners Through Fun! 🌈</p>
       </footer>
+
+      {/* Profile Edit Modal */}
+      <ProfileEditModal
+        isOpen={showProfileEdit}
+        onClose={() => setShowProfileEdit(false)}
+        user={user || { id: 0, username: '' }}
+        onUpdate={handleUpdateUser}
+      />
     </div>
   );
 };

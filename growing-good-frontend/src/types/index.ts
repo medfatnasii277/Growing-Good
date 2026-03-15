@@ -2,6 +2,7 @@ export interface User {
   id: number;
   username: string;
   role: 'admin' | 'user';
+  avatar?: string;
   created_at: string;
 }
 
@@ -32,11 +33,13 @@ export interface ContentItem {
   id: number;
   title: string;
   description?: string;
-  content_type: 'quiz' | 'reading' | 'click_game';
+  content_type: ContentType;
   category_id?: number;
-  data: QuizData | ReadingData | ClickGameData;
+  data: ContentData;
   is_active: boolean;
 }
+
+export type ContentType = 'quiz' | 'reading' | 'click_game';
 
 export interface QuizData {
   questions: QuizQuestion[];
@@ -63,6 +66,8 @@ export interface ClickGameData {
   time_limit_seconds: number;
 }
 
+export type ContentData = QuizData | ReadingData | ClickGameData;
+
 export interface UserProgress {
   id: number;
   user_id: number;
@@ -75,9 +80,9 @@ export interface UserProgress {
 export interface CreateContentRequest {
   title: string;
   description?: string;
-  content_type: 'quiz' | 'reading' | 'click_game';
+  content_type: ContentType;
   category_id?: number;
-  data: any;
+  data: ContentData;
 }
 
 export interface CreateCategoryRequest {
@@ -97,4 +102,13 @@ export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   user_rank?: number;
   user_score?: number;
+}
+
+export interface UpdateProfileRequest {
+  username?: string;
+  avatar?: string;
+}
+
+export interface ApiErrorResponse {
+  error?: string;
 }
